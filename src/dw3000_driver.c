@@ -15,14 +15,12 @@
 
 LOG_MODULE_REGISTER(dw3000, LOG_LEVEL_INF);
 
+/* Device Tree Node */
+#define DW3000_NODE DT_NODELABEL(dw3000)
+
 /* SPI Configuration */
-#define DW3000_SPI_NODE DT_NODELABEL(dw3000_spi)
 #define DW3000_SPI_FREQ 8000000
 #define DW3000_SPI_MODE (SPI_WORD_SET(8) | SPI_TRANSFER_MSB)
-
-/* GPIO Configuration */
-#define DW3000_RST_NODE DT_NODELABEL(dw3000_reset)
-#define DW3000_IRQ_NODE DT_NODELABEL(dw3000_irq)
 
 /* SPI Commands */
 #define DW3000_SPI_WRITE 0x80
@@ -34,7 +32,8 @@ LOG_MODULE_REGISTER(dw3000, LOG_LEVEL_INF);
 /* Static variables */
 static const struct device *spi_dev;
 static struct spi_config spi_cfg;
-static struct spi_cs_control cs_ctrl;
+static struct gpio_dt_spec reset_gpio = GPIO_DT_SPEC_GET(DW3000_NODE, reset_gpios);
+static struct gpio_dt_spec wakeup_gpio = GPIO_DT_SPEC_GET(DW3000_NODE, wakeup_gpios);
 
 /* Helper function to perform SPI transaction */
 static int dw3000_spi_transfer(uint16_t reg, uint8_t *data, uint16_t len, bool write)
@@ -89,10 +88,12 @@ int dw3000_write_reg(uint16_t reg, const uint8_t *data, uint16_t len)
 
 int dw3000_init(void)
 {
+    int ret;
+
     LOG_INF("Initializing DW3000");
 
     /* Get SPI device */
-    spi_dev = DEVICE_DT_GET(DT_NODELABEL(spi3));
+    spi_dev = DEVICE_DT_GET(DT_BUS(DW3000_NODE));
     if (!device_is_ready(spi_dev)) {
         LOG_ERR("SPI device not ready");
         return -ENODEV;
@@ -100,11 +101,47 @@ int dw3000_init(void)
 
     /* Configure SPI */
     spi_cfg.frequency = DW3000_SPI_FREQ;
-    spi_cfg.operation = DW3000_SPI_MODE;
+    spi_cfg.operation = DW3000_SPI_MODE | SPI_MODE_CPOL | SPI_MODE_CPHA;
     spi_cfg.slave = 0;
-    spi_cfg.cs = (struct spi_cs_control){0}; /* CS controlled by device tree */
 
-    /* Perform soft reset */
+    /* Configure CS control from device tree */
+    spi_cfg.cs = (struct spi_cs_control) {
+        .gpio = SPI_CS_GPIOS_DT_SPEC_GET(DW3000_NODE),
+        .delay = 0,
+    };
+
+    /* Initialize reset GPIO */
+    if (!gpio_is_ready_dt(&reset_gpio)) {
+        LOG_ERR("Reset GPIO not ready");
+        return -ENODEV;
+    }
+
+    ret = gpio_pin_configure_dt(&reset_gpio, GPIO_OUTPUT_INACTIVE);
+    if (ret < 0) {
+        LOG_ERR("Failed to configure reset GPIO: %d", ret);
+        return ret;
+    }
+
+    /* Initialize wakeup GPIO (keep high to prevent sleep) */
+    if (gpio_is_ready_dt(&wakeup_gpio)) {
+        ret = gpio_pin_configure_dt(&wakeup_gpio, GPIO_OUTPUT_ACTIVE);
+        if (ret < 0) {
+            LOG_WRN("Failed to configure wakeup GPIO: %d", ret);
+        }
+    }
+
+    /* Perform hardware reset sequence */
+    LOG_INF("Performing hardware reset");
+
+    /* Assert reset (active low) */
+    gpio_pin_set_dt(&reset_gpio, 1);  /* Pull low to reset */
+    k_sleep(K_MSEC(10));
+
+    /* Deassert reset */
+    gpio_pin_set_dt(&reset_gpio, 0);  /* Release reset */
+    k_sleep(K_MSEC(5));
+
+    /* Wait for chip to be ready */
     k_sleep(K_MSEC(10));
 
     /* Read and verify device ID */
