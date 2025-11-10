@@ -14,8 +14,11 @@
 
 LOG_MODULE_REGISTER(uart_output, LOG_LEVEL_INF);
 
-/* UART device */
+/* UART devices */
 static const struct device *uart_dev;
+#ifdef CONFIG_USB_CDC_ACM
+static const struct device *usb_uart_dev;
+#endif
 
 /* Output buffer */
 #define OUTPUT_BUFFER_SIZE 512
@@ -28,9 +31,22 @@ static K_MUTEX_DEFINE(output_mutex);
 static void uart_send_string(const char *str)
 {
     int len = strlen(str);
-    for (int i = 0; i < len; i++) {
-        uart_poll_out(uart_dev, str[i]);
+
+    /* Send to physical UART */
+    if (uart_dev && device_is_ready(uart_dev)) {
+        for (int i = 0; i < len; i++) {
+            uart_poll_out(uart_dev, str[i]);
+        }
     }
+
+#ifdef CONFIG_USB_CDC_ACM
+    /* Send to USB CDC ACM */
+    if (usb_uart_dev && device_is_ready(usb_uart_dev)) {
+        for (int i = 0; i < len; i++) {
+            uart_poll_out(usb_uart_dev, str[i]);
+        }
+    }
+#endif
 }
 
 int uart_output_init(void)
@@ -43,6 +59,17 @@ int uart_output_init(void)
         LOG_ERR("UART device not ready");
         return -ENODEV;
     }
+
+#ifdef CONFIG_USB_CDC_ACM
+    /* Get USB CDC ACM device */
+    usb_uart_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_cdc_acm_uart0));
+    if (!device_is_ready(usb_uart_dev)) {
+        LOG_WRN("USB CDC ACM device not ready");
+        usb_uart_dev = NULL;
+    } else {
+        LOG_INF("USB CDC ACM device ready");
+    }
+#endif
 
     /* Send startup message */
     uart_send_string("\r\n");

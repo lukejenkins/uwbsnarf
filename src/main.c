@@ -7,6 +7,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/version.h>
+#include <zephyr/usb/usb_device.h>
+#include <zephyr/drivers/uart.h>
 
 #include "uwb_scanner.h"
 #include "uart_output.h"
@@ -71,8 +73,21 @@ int main(void)
 {
     int ret;
 
+#ifdef CONFIG_USB_DEVICE_STACK
+    /* Initialize USB device */
+    ret = usb_enable(NULL);
+    if (ret != 0) {
+        LOG_ERR("Failed to enable USB: %d", ret);
+    } else {
+        LOG_INF("USB device enabled");
+    }
+
+    /* Wait for USB to be ready and enumerated */
+    k_sleep(K_MSEC(1000));
+#else
     /* Wait for console to be ready */
     k_sleep(K_MSEC(100));
+#endif
 
     LOG_INF("==============================================");
     LOG_INF("    UWB Device Scanner");

@@ -7,10 +7,18 @@
     chosen {
         zephyr,console = &uart0;
         zephyr,shell-uart = &uart0;
+        zephyr,cdc-acm-uart0 = &cdc_acm_uart0;
     };
 
     aliases {
         dw3000-spi = &spi3;
+    };
+};
+
+/* Enable USB */
+&zephyr_udc0 {
+    cdc_acm_uart0: cdc_acm_uart0 {
+        compatible = "zephyr,cdc-acm-uart";
     };
 };
 
