@@ -73,8 +73,19 @@ static int dw3000_spi_transfer(uint16_t reg, uint8_t *data, uint16_t len, bool w
 
     int ret = spi_transceive(spi_dev, &spi_cfg, &tx, &rx);
     if (ret < 0) {
-        LOG_ERR("SPI transfer failed: %d", ret);
+        LOG_ERR("SPI transfer failed: %d (reg=0x%04X, len=%d, write=%d)", 
+                ret, reg, len, write);
         return ret;
+    }
+    
+    /* Debug: Print first few bytes of read data */
+    if (!write && len > 0) {
+        LOG_DBG("SPI read reg 0x%04X: 0x%02X 0x%02X 0x%02X 0x%02X", 
+                reg, 
+                len > 0 ? data[0] : 0,
+                len > 1 ? data[1] : 0,
+                len > 2 ? data[2] : 0,
+                len > 3 ? data[3] : 0);
     }
 
     return 0;
@@ -109,10 +120,11 @@ int dw3000_init(void)
         LOG_ERR("SPI device not ready");
         return -ENODEV;
     }
+    LOG_DBG("SPI device ready: %s", spi_dev->name);
 
-    /* Configure SPI */
+    /* Configure SPI - DW3000 requires SPI Mode 0 (CPOL=0, CPHA=0) */
     spi_cfg.frequency = DW3000_SPI_FREQ;
-    spi_cfg.operation = DW3000_SPI_MODE | SPI_MODE_CPOL | SPI_MODE_CPHA;
+    spi_cfg.operation = DW3000_SPI_MODE;
     spi_cfg.slave = 0;
 
     /* Configure CS control from device tree */
@@ -120,39 +132,50 @@ int dw3000_init(void)
         .gpio = SPI_CS_GPIOS_DT_SPEC_GET(DW3000_NODE),
         .delay = 0,
     };
+    
+    LOG_DBG("SPI config: freq=%d Hz, mode=0x%08X", spi_cfg.frequency, spi_cfg.operation);
 
-    /* Configure reset GPIO (active low) */
-    ret = gpio_pin_configure(gpio_dev, DW3000_RESET_PIN, GPIO_OUTPUT_INACTIVE);
+    /* Configure reset GPIO (output, initially high/inactive since active-low) */
+    ret = gpio_pin_configure(gpio_dev, DW3000_RESET_PIN, GPIO_OUTPUT_HIGH);
     if (ret < 0) {
         LOG_ERR("Failed to configure reset GPIO: %d", ret);
         return ret;
     }
 
     /* Configure wakeup GPIO (keep high to prevent sleep) */
-    ret = gpio_pin_configure(gpio_dev, DW3000_WAKEUP_PIN, GPIO_OUTPUT_ACTIVE);
+    ret = gpio_pin_configure(gpio_dev, DW3000_WAKEUP_PIN, GPIO_OUTPUT_HIGH);
     if (ret < 0) {
         LOG_WRN("Failed to configure wakeup GPIO: %d", ret);
-    } else {
-        gpio_pin_set(gpio_dev, DW3000_WAKEUP_PIN, 1);
     }
 
     /* Perform hardware reset sequence */
     LOG_INF("Performing hardware reset");
 
-    /* Assert reset (active low) - pull low to reset */
-    gpio_pin_set(gpio_dev, DW3000_RESET_PIN, 1);
-    k_sleep(K_MSEC(10));
+    /* Ensure wakeup is high first */
+    gpio_pin_set(gpio_dev, DW3000_WAKEUP_PIN, 1);
+    k_sleep(K_MSEC(1));
 
-    /* Deassert reset - return to high */
+    /* Assert reset (pull low since active-low) */
     gpio_pin_set(gpio_dev, DW3000_RESET_PIN, 0);
-    k_sleep(K_MSEC(5));
-
-    /* Wait for chip to be ready */
     k_sleep(K_MSEC(10));
+
+    /* Deassert reset (pull high) */
+    gpio_pin_set(gpio_dev, DW3000_RESET_PIN, 1);
+    
+    /* Wait for chip to stabilize after reset - DW3000 needs time to boot */
+    k_sleep(K_MSEC(5));
 
     /* Read and verify device ID */
     uint32_t dev_id = dw3000_get_device_id();
     LOG_INF("Device ID: 0x%08X", dev_id);
+    
+    /* If we get all zeros, try one more time with longer delay */
+    if (dev_id == 0x00000000) {
+        LOG_WRN("Got zero device ID, retrying with longer delay");
+        k_sleep(K_MSEC(10));
+        dev_id = dw3000_get_device_id();
+        LOG_INF("Device ID (retry): 0x%08X", dev_id);
+    }
 
     if ((dev_id & 0xFFFFFF00) != (DW3000_DEVICE_ID & 0xFFFFFF00)) {
         LOG_ERR("Invalid device ID: expected 0x%08X, got 0x%08X",

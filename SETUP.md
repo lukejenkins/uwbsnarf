@@ -39,20 +39,67 @@ brew install cmake ninja gperf python3 ccache qemu dtc wget libmagic
 pip3 install --user -U west
 
 # Create workspace and clone Zephyr
-west init -m https://github.com/zephyrproject-rtos/zephyr --mr v3.5.0 ~/zephyr-workspace
-cd ~/zephyr-workspace
+# Note: You can use either ~/zephyrproject or ~/zephyr-workspace
+# The build scripts will auto-detect both locations
+west init -m https://github.com/zephyrproject-rtos/zephyr --mr v3.5.0 ~/zephyrproject
+cd ~/zephyrproject
 west update
 
 # Export Zephyr CMake package
 west zephyr-export
 
+# Set up Python virtual environment (recommended)
+python3 -m venv .venv
+source .venv/bin/activate
+
 # Install Python dependencies
-pip3 install --user -r ~/zephyr-workspace/zephyr/scripts/requirements.txt
+pip3 install -r ~/zephyrproject/zephyr/scripts/requirements.txt
 ```
 
-## Step 3: Install ARM Toolchain
+**Important Environment Variables:**
 
-### Linux
+The build scripts will automatically detect and set these, but you can also set them manually:
+
+- **ZEPHYR_BASE**: Path to Zephyr repository (auto-detected from workspace)
+- **ZEPHYR_SDK_INSTALL_DIR**: Path to Zephyr SDK installation
+  - Auto-detected locations: `~/zephyrproject/zephyr-sdk-0.17.0` or `~/zephyr-sdk-0.17.0`
+- **Python .venv**: If present in the Zephyr workspace, will be auto-activated
+
+## Step 3: Install Zephyr SDK (Recommended)
+
+The Zephyr SDK includes the ARM toolchain and other tools needed for building. This is the recommended approach.
+
+### Download and Install Zephyr SDK
+
+```bash
+# Download Zephyr SDK 0.17.0 (adjust version as needed)
+cd ~/zephyrproject
+wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.0/zephyr-sdk-0.17.0_macos-x86_64.tar.xz  # macOS Intel
+# Or for macOS ARM: zephyr-sdk-0.17.0_macos-aarch64.tar.xz
+# Or for Linux: zephyr-sdk-0.17.0_linux-x86_64.tar.xz
+
+# Extract
+tar xvf zephyr-sdk-0.17.0_*.tar.xz
+
+# Run the SDK setup script
+cd zephyr-sdk-0.17.0
+./setup.sh
+
+# The build scripts will auto-detect the SDK at:
+# - ~/zephyrproject/zephyr-sdk-0.17.0
+# - ~/zephyr-sdk-0.17.0
+```
+
+**Note:** If you install the SDK to a different location, set the environment variable:
+```bash
+export ZEPHYR_SDK_INSTALL_DIR=/path/to/zephyr-sdk-0.17.0
+```
+
+### Alternative: ARM GCC Toolchain Only
+
+If you prefer not to use the Zephyr SDK, you can install just the ARM toolchain:
+
+#### Linux
 ```bash
 cd ~
 wget https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
@@ -65,7 +112,7 @@ export ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
 export GNUARMEMB_TOOLCHAIN_PATH=~/gcc-arm-none-eabi-10.3-2021.10
 ```
 
-### macOS
+#### macOS
 ```bash
 brew install --cask gcc-arm-embedded
 export ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
@@ -75,15 +122,40 @@ export GNUARMEMB_TOOLCHAIN_PATH=/usr/local
 ## Step 4: Clone and Build Project
 
 ```bash
-# Copy the uwbsnarf project to Zephyr workspace
-cp -r /path/to/uwbsnarf ~/zephyr-workspace/
+# Clone the uwbsnarf project (if you haven't already)
+git clone <repository-url> ~/uwbsnarf
+cd ~/uwbsnarf
+
+# Build the project (no need to manually source environment!)
+./scripts/build.sh
+```
+
+The build script will automatically:
+- Detect your Zephyr workspace at `~/zephyrproject` or `~/zephyr-workspace`
+- Activate the Python virtual environment if present
+- Source the Zephyr environment
+- Auto-detect the Zephyr SDK at common locations
+- Build the firmware for the DWM3001CDK board
+
+**Manual Environment Setup (Optional):**
+
+If you prefer to set up the environment manually or the auto-detection fails:
+
+```bash
+# Navigate to Zephyr workspace
+cd ~/zephyrproject
+
+# Activate Python virtual environment
+source .venv/bin/activate
 
 # Source Zephyr environment
-cd ~/zephyr-workspace
 source zephyr/zephyr-env.sh
 
-# Build the project
-cd uwbsnarf
+# Set SDK location if not auto-detected
+export ZEPHYR_SDK_INSTALL_DIR=~/zephyrproject/zephyr-sdk-0.17.0
+
+# Then build from your project directory
+cd ~/uwbsnarf
 ./scripts/build.sh
 ```
 
@@ -94,6 +166,8 @@ Connect your DWM3001CDK via USB and flash:
 ```bash
 ./scripts/flash.sh
 ```
+
+The flash script will automatically handle environment setup, just like the build script.
 
 ## Step 6: Monitor Output
 
@@ -109,24 +183,69 @@ On macOS, the device might be at `/dev/tty.usbmodem*`. On Windows (WSL2), it mig
 
 ## Troubleshooting
 
+### Build script cannot find Zephyr workspace
+If the build script fails to auto-detect your Zephyr installation:
+
+1. Ensure Zephyr is installed at `~/zephyrproject` or `~/zephyr-workspace`
+2. Or manually set the environment:
+   ```bash
+   export ZEPHYR_BASE=~/path/to/zephyr
+   ./scripts/build.sh
+   ```
+
+### ZEPHYR_SDK_INSTALL_DIR not found
+If you see warnings about the SDK not being found:
+
+1. Install the Zephyr SDK to a standard location:
+   - `~/zephyrproject/zephyr-sdk-0.17.0`
+   - `~/zephyr-sdk-0.17.0`
+2. Or set the environment variable:
+   ```bash
+   export ZEPHYR_SDK_INSTALL_DIR=/path/to/zephyr-sdk-0.17.0
+   ./scripts/build.sh
+   ```
+
+### Python dependency issues
+If you encounter Python module errors:
+
+1. Activate the virtual environment:
+   ```bash
+   cd ~/zephyrproject
+   source .venv/bin/activate
+   pip install -r zephyr/scripts/requirements.txt
+   ```
+2. Then run the build script again
+
 ### Device not detected
 - Check USB connection
-- Verify device appears in `lsusb` output
-- Check permissions: `sudo usermod -a -G dialout $USER` (then log out and back in)
+- Verify device appears in `lsusb` output (Linux) or System Information (macOS)
+- Check permissions: `sudo usermod -a -G dialout $USER` (Linux, then log out and back in)
 
 ### Build errors
-- Ensure Zephyr environment is sourced: `source ~/zephyr-workspace/zephyr/zephyr-env.sh`
-- Clean build: `rm -rf build && ./scripts/build.sh`
+- Clean build: Remove the build directory in Zephyr workspace
+  ```bash
+  rm -rf ~/zephyrproject/build && ./scripts/build.sh
+  ```
+- Verify all environment variables are set correctly
+- Ensure Zephyr SDK is properly installed
+
+### West command not found
+- Ensure west is installed: `pip3 install --user -U west`
+- Add Python user bin to PATH: `export PATH=$PATH:~/.local/bin`
 
 ### No output on serial
 - Check baud rate is 115200
 - Verify correct serial port
+  - Linux: `/dev/ttyACM0` or `/dev/ttyUSB0`
+  - macOS: `/dev/tty.usbmodem*`
 - Try resetting the device
+- Check that the correct USB port is connected (use the one labeled "J-Link")
 
 ### DW3000 initialization fails
 - Check SPI connections
 - Verify device tree overlay is correct
 - Check power supply (should be USB powered)
+- Verify GPIO initialization in the overlay file
 
 ## Next Steps
 
