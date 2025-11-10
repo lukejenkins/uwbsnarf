@@ -6,9 +6,11 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/version.h>
 
 #include "uwb_scanner.h"
 #include "uart_output.h"
+#include "version.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -72,11 +74,15 @@ int main(void)
     /* Wait for console to be ready */
     k_sleep(K_MSEC(100));
 
-    LOG_INF("Starting UWB Device Scanner");
-    LOG_INF("===========================================");
-    LOG_INF("UWB Device Scanner v1.0");
-    LOG_INF("Qorvo DWM3001CDK");
-    LOG_INF("===========================================");
+    LOG_INF("==============================================");
+    LOG_INF("    UWB Device Scanner");
+    LOG_INF("==============================================");
+    LOG_INF("Version:      %s", APP_VERSION_STRING);
+    LOG_INF("Git Hash:     %s", GIT_COMMIT_HASH);
+    LOG_INF("Build Time:   %s", BUILD_TIMESTAMP);
+    LOG_INF("Zephyr:       %s", KERNEL_VERSION_STRING);
+    LOG_INF("Board:        %s", CONFIG_BOARD);
+    LOG_INF("==============================================");
 
     /* Initialize UART output */
     ret = uart_output_init();
