@@ -40,20 +40,7 @@
     pinctrl-names = "default", "sleep";
 };
 
-
-/* GPIO configuration for DW3000 control pins */
+/* GPIO configuration */
 &gpio0 {
     status = "okay";
-
-    dw3000_reset: dw3000-reset {
-        gpio-hog;
-        gpios = <24 GPIO_ACTIVE_LOW>;
-        output-high;
-    };
-
-    dw3000_irq: dw3000-irq {
-        gpio-hog;
-        gpios = <19 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-        input;
-    };
 };

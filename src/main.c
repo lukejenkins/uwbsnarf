@@ -69,14 +69,14 @@ int main(void)
 {
     int ret;
 
-    printk("\n");
-    printk("===========================================\n");
-    printk("UWB Device Scanner\n");
-    printk("Qorvo DWM3001CDK\n");
-    printk("===========================================\n");
-    printk("\n");
+    /* Wait for console to be ready */
+    k_sleep(K_MSEC(100));
 
     LOG_INF("Starting UWB Device Scanner");
+    LOG_INF("===========================================");
+    LOG_INF("UWB Device Scanner v1.0");
+    LOG_INF("Qorvo DWM3001CDK");
+    LOG_INF("===========================================");
 
     /* Initialize UART output */
     ret = uart_output_init();
