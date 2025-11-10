@@ -92,7 +92,7 @@ int dw3000_init(void)
     LOG_INF("Initializing DW3000");
 
     /* Get SPI device */
-    spi_dev = DEVICE_DT_GET(DT_NODELABEL(spi1));
+    spi_dev = DEVICE_DT_GET(DT_NODELABEL(spi3));
     if (!device_is_ready(spi_dev)) {
         LOG_ERR("SPI device not ready");
         return -ENODEV;
@@ -102,7 +102,7 @@ int dw3000_init(void)
     spi_cfg.frequency = DW3000_SPI_FREQ;
     spi_cfg.operation = DW3000_SPI_MODE;
     spi_cfg.slave = 0;
-    spi_cfg.cs = NULL; /* CS controlled by GPIO */
+    spi_cfg.cs = (struct spi_cs_control){0}; /* CS controlled by device tree */
 
     /* Perform soft reset */
     k_sleep(K_MSEC(10));
