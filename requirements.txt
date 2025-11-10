@@ -1,0 +1,2 @@
+# Python requirements for UWB scanner utilities
+pyserial>=3.5

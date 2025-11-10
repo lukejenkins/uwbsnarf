@@ -1,0 +1,29 @@
+# Git attributes for UWB scanner project
+
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Shell scripts should always use LF
+*.sh text eol=lf
+*.py text eol=lf
+
+# Source files
+*.c text
+*.h text
+*.cpp text
+*.hpp text
+
+# Configuration files
+*.conf text
+*.overlay text
+CMakeLists.txt text
+*.cmake text
+
+# Documentation
+*.md text
+*.txt text
+
+# Binary files
+*.bin binary
+*.hex binary
+*.elf binary
