@@ -2,6 +2,44 @@
 
 This project implements a UWB device scanner that detects nearby UWB devices and outputs comprehensive information via UART.
 
+## Current Status
+
+Broken.
+
+```plaintext
+*** Booting Zephyr OS build v4.3.0-rc3-3-gdf8b43d330ed ***
+[00:00:00.250,335] <inf> main: USB device enabled
+[00:00:00.254,364] <inf> usb_cdc_acm: Device suspended
+[17:34:55] STATUS: Initializing UWB scanner...
+[00:00:00.627,197] <inf> usb_cdc_acm: Device resumed
+[00:00:00.681,640] <inf> usb_cdc_acm: Device configured
+[00:00:01.250,427] <inf> main: ==============================================
+[00:00:01.250,427] <inf> main:     UWB Device Scanner
+[00:00:01.250,427] <inf> main: ==============================================
+[00:00:01.250,457] <inf> main: Version:      1.0.0
+[00:00:01.250,488] <inf> main: Git Hash:     0789688
+[00:00:01.250,518] <inf> main: Build Time:   2025-11-11 00:33:51 UTC
+[00:00:01.250,549] <inf> main: Zephyr:       4.3.0-rc3
+[00:00:01.250,549] <inf> main: Board:        decawave_dwm3001cdk
+ ERROR: UWB scanner initialization failed
+[0m
+[00:00:01.250,579] <inf> main: ==============================================
+[00:00:01.250,579] <inf> uart_output: Initializing UART output
+[00:00:01.250,579] <inf> uart_output: USB CDC ACM device ready
+[00:00:01.250,610] <inf> uart_output: UART output initialized successfully
+[00:00:01.255,920] <inf> uwb_scanner: Initializing UWB scanner
+[00:00:01.255,950] <inf> dw3000: Initializing DW3000
+[00:00:01.255,950] <inf> dw3000: Performing hardware reset
+[00:00:01.266,082] <inf> dw3000: Device ID (attempt 1): 0xFFFFFFFF
+[00:00:01.276,306] <inf> dw3000: Device ID (attempt 2): 0xFFFFFFFF
+[00:00:01.286,529] <inf> dw3000: Device ID (attempt 3): 0xFFFFFFFF
+[00:00:01.296,752] <inf> dw3000: Device ID (attempt 4): 0xFFFFFFFF
+[00:00:01.306,976] <inf> dw3000: Device ID (attempt 5): 0xFFFFFFFF
+[00:00:01.317,077] <err> dw3000: Device ID reads as 0xFFFFFFFF - chip not responding or not powered
+[00:00:01.317,077] <err> uwb_scanner: Failed to initialize DW3000: -5
+[00:00:01.317,077] <err> main: Failed to initialize UWB scanner: -5
+```
+
 ## Features
 
 - Continuous UWB device scanning

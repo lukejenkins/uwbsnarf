@@ -71,14 +71,6 @@ int uart_output_init(void)
     }
 #endif
 
-    /* Send startup message */
-    uart_send_string("\r\n");
-    uart_send_string("===========================================\r\n");
-    uart_send_string("UWB Device Scanner v1.0\r\n");
-    uart_send_string("Qorvo DWM3001CDK\r\n");
-    uart_send_string("===========================================\r\n");
-    uart_send_string("\r\n");
-
     LOG_INF("UART output initialized successfully");
     return 0;
 }

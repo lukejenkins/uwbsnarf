@@ -8,6 +8,7 @@
 #include <zephyr/drivers/spi.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/util.h>
 #include <string.h>
 #include <math.h>
 
@@ -23,17 +24,17 @@ LOG_MODULE_REGISTER(dw3000, LOG_LEVEL_INF);
 #define DW3000_SPI_FREQ_SLOW 2000000  /* Slower speed for init */
 #define DW3000_SPI_MODE (SPI_WORD_SET(8) | SPI_TRANSFER_MSB)
 
-/* GPIO Pins for DWM3001CDK */
-#define DW3000_RESET_PIN  24
-#define DW3000_WAKEUP_PIN 18
-#define DW3000_IRQ_PIN    19
-
 /* SPI Commands */
 #define DW3000_SPI_WRITE 0x80
 #define DW3000_SPI_READ  0x00
 
 /* Device constants */
 #define DW3000_DEVICE_ID 0xDECA0302
+
+/* GPIO Pins for DWM3001CDK */
+#define DW3000_RESET_PIN  24
+#define DW3000_WAKEUP_PIN 18
+#define DW3000_IRQ_PIN    19
 
 /* Static variables */
 static const struct device *spi_dev;
@@ -44,6 +45,7 @@ static const struct device *gpio_dev;
 static int dw3000_spi_transfer(uint16_t reg, uint8_t *data, uint16_t len, bool write)
 {
     uint8_t header[3];
+    uint8_t header_rx[3];
     int header_len;
 
     /* Build SPI header */
@@ -60,17 +62,17 @@ static int dw3000_spi_transfer(uint16_t reg, uint8_t *data, uint16_t len, bool w
     }
 
     struct spi_buf tx_bufs[] = {
-        {.buf = header, .len = header_len},
+        {.buf = header, .len = (size_t)header_len},
         {.buf = write ? data : NULL, .len = write ? len : 0}
     };
 
     struct spi_buf rx_bufs[] = {
-        {.buf = NULL, .len = header_len},
+        {.buf = header_rx, .len = (size_t)header_len},
         {.buf = write ? NULL : data, .len = write ? 0 : len}
     };
 
-    struct spi_buf_set tx = {.buffers = tx_bufs, .count = 2};
-    struct spi_buf_set rx = {.buffers = rx_bufs, .count = 2};
+    struct spi_buf_set tx = {.buffers = tx_bufs, .count = 2U};
+    struct spi_buf_set rx = {.buffers = rx_bufs, .count = 2U};
 
     int ret = spi_transceive(spi_dev, &spi_cfg, &tx, &rx);
     if (ret < 0) {
@@ -220,7 +222,7 @@ int dw3000_init(void)
     }
 
     LOG_INF("DW3000 detected successfully, switching to full speed SPI");
-    
+
     /* Now that we confirmed the chip is working, switch to full speed */
     spi_cfg.frequency = DW3000_SPI_FREQ;
     

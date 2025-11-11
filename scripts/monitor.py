@@ -14,10 +14,8 @@ from datetime import datetime
 def parse_device_info(data):
     """Parse JSON device information"""
     try:
-        info = json.loads(data)
-        return info
-    except json.JSONDecodeError as e:
-        print(f"JSON decode error: {e}")
+        return json.loads(data)
+    except json.JSONDecodeError:
         return None
 
 
@@ -69,6 +67,8 @@ def main():
         output_file = open(args.output, 'w')
         print(f"Logging to: {args.output}")
 
+    ser = None
+
     try:
         # Open serial port
         print(f"Connecting to {args.port} at {args.baudrate} baud...")
@@ -86,13 +86,34 @@ def main():
                         output_file.write(line + '\n')
                         output_file.flush()
 
-                    # Parse and display
-                    info = parse_device_info(line)
+                    # Split out any leading non-JSON text (e.g. Zephyr logs)
+                    stripped = line.strip()
+                    if not stripped:
+                        continue
+
+                    json_start = stripped.find('{')
+                    if json_start > 0:
+                        prefix = stripped[:json_start].strip()
+                        if prefix:
+                            print(prefix)
+                        stripped = stripped[json_start:]
+                    elif json_start == -1:
+                        print(stripped)
+                        continue
+
+                    json_end = stripped.rfind('}')
+                    if json_end > -1 and json_end + 1 < len(stripped):
+                        suffix = stripped[json_end + 1:].strip()
+                        if suffix:
+                            print(suffix)
+                        stripped = stripped[:json_end + 1]
+
+                    info = parse_device_info(stripped)
                     if info:
                         format_device_info(info)
                     else:
-                        # Not JSON, just print it
-                        print(line)
+                        # If we still cannot parse, print the raw JSON-ish line once
+                        print(stripped)
 
             except UnicodeDecodeError:
                 # Skip non-UTF8 data
@@ -108,7 +129,8 @@ def main():
     finally:
         if output_file:
             output_file.close()
-        ser.close()
+        if ser:
+            ser.close()
 
 
 if __name__ == '__main__':
