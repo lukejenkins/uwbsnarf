@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(dw3000, LOG_LEVEL_INF);
 
 /* SPI Configuration */
 #define DW3000_SPI_FREQ 8000000
+#define DW3000_SPI_FREQ_SLOW 2000000  /* Slower speed for init */
 #define DW3000_SPI_MODE (SPI_WORD_SET(8) | SPI_TRANSFER_MSB)
 
 /* GPIO Pins for DWM3001CDK */
@@ -123,14 +124,15 @@ int dw3000_init(void)
     LOG_DBG("SPI device ready: %s", spi_dev->name);
 
     /* Configure SPI - DW3000 requires SPI Mode 0 (CPOL=0, CPHA=0) */
-    spi_cfg.frequency = DW3000_SPI_FREQ;
+    /* Start with slower speed for initialization */
+    spi_cfg.frequency = DW3000_SPI_FREQ_SLOW;
     spi_cfg.operation = DW3000_SPI_MODE;
     spi_cfg.slave = 0;
 
     /* Configure CS control from device tree */
     spi_cfg.cs = (struct spi_cs_control) {
         .gpio = SPI_CS_GPIOS_DT_SPEC_GET(DW3000_NODE),
-        .delay = 0,
+        .delay = 2,  /* 2us delay after CS assertion */
     };
     
     LOG_DBG("SPI config: freq=%d Hz, mode=0x%08X", spi_cfg.frequency, spi_cfg.operation);
@@ -151,30 +153,64 @@ int dw3000_init(void)
     /* Perform hardware reset sequence */
     LOG_INF("Performing hardware reset");
 
-    /* Ensure wakeup is high first */
-    gpio_pin_set(gpio_dev, DW3000_WAKEUP_PIN, 1);
-    k_sleep(K_MSEC(1));
+    /* DW3000 wakeup sequence: 
+     * The chip might be in deep sleep. We need to wake it first before reset.
+     * Wakeup requires pulling WAKEUP low briefly, then high.
+     */
+    
+    /* First, try to wake the chip from deep sleep */
+    LOG_DBG("Waking chip from potential deep sleep");
+    gpio_pin_set(gpio_dev, DW3000_WAKEUP_PIN, 0);  /* Pull WAKEUP low */
+    k_sleep(K_USEC(500));  /* 500us low pulse */
+    gpio_pin_set(gpio_dev, DW3000_WAKEUP_PIN, 1);  /* Pull WAKEUP high */
+    k_sleep(K_MSEC(2));  /* Wait for wakeup */
 
-    /* Assert reset (pull low since active-low) */
+    /* Now perform the hardware reset */
+    LOG_DBG("Asserting reset (low)");
     gpio_pin_set(gpio_dev, DW3000_RESET_PIN, 0);
-    k_sleep(K_MSEC(10));
+    k_sleep(K_MSEC(2));  /* Hold reset for 2ms minimum */
 
     /* Deassert reset (pull high) */
+    LOG_DBG("Deasserting reset (high)");
     gpio_pin_set(gpio_dev, DW3000_RESET_PIN, 1);
     
-    /* Wait for chip to stabilize after reset - DW3000 needs time to boot */
-    k_sleep(K_MSEC(5));
-
-    /* Read and verify device ID */
-    uint32_t dev_id = dw3000_get_device_id();
-    LOG_INF("Device ID: 0x%08X", dev_id);
+    /* Keep WAKEUP high to prevent chip from going back to sleep */
+    gpio_pin_set(gpio_dev, DW3000_WAKEUP_PIN, 1);
     
-    /* If we get all zeros, try one more time with longer delay */
-    if (dev_id == 0x00000000) {
-        LOG_WRN("Got zero device ID, retrying with longer delay");
-        k_sleep(K_MSEC(10));
+    /* Wait for chip to stabilize after reset - DW3000 datasheet specifies 5ms */
+    k_sleep(K_MSEC(5));
+    
+    LOG_DBG("Attempting to read device ID");
+
+    /* Try a simple SPI loopback test first by reading a known register */
+    uint8_t test_buf[4] = {0};
+    int ret_test = dw3000_read_reg(DW3000_REG_DEV_ID, test_buf, 4);
+    LOG_DBG("Initial SPI test: ret=%d, data=[0x%02X 0x%02X 0x%02X 0x%02X]",
+            ret_test, test_buf[0], test_buf[1], test_buf[2], test_buf[3]);
+
+    /* Read and verify device ID - try multiple times */
+    uint32_t dev_id = 0;
+    int attempts = 0;
+    for (attempts = 0; attempts < 5; attempts++) {
         dev_id = dw3000_get_device_id();
-        LOG_INF("Device ID (retry): 0x%08X", dev_id);
+        LOG_INF("Device ID (attempt %d): 0x%08X", attempts + 1, dev_id);
+        
+        /* Check if we got a valid response (not 0x00000000 or 0xFFFFFFFF) */
+        if (dev_id != 0x00000000 && dev_id != 0xFFFFFFFF) {
+            break;
+        }
+        
+        /* Wait a bit before retrying */
+        k_sleep(K_MSEC(10));
+    }
+    
+    /* If we still have all 1s or all 0s, there's a communication problem */
+    if (dev_id == 0x00000000) {
+        LOG_ERR("Device ID reads as 0x00000000 - possible SPI connection issue");
+        return -EIO;
+    } else if (dev_id == 0xFFFFFFFF) {
+        LOG_ERR("Device ID reads as 0xFFFFFFFF - chip not responding or not powered");
+        return -EIO;
     }
 
     if ((dev_id & 0xFFFFFF00) != (DW3000_DEVICE_ID & 0xFFFFFF00)) {
@@ -183,6 +219,11 @@ int dw3000_init(void)
         return -EINVAL;
     }
 
+    LOG_INF("DW3000 detected successfully, switching to full speed SPI");
+    
+    /* Now that we confirmed the chip is working, switch to full speed */
+    spi_cfg.frequency = DW3000_SPI_FREQ;
+    
     LOG_INF("DW3000 initialized successfully");
     return 0;
 }
