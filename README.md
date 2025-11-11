@@ -70,6 +70,8 @@ The scanner outputs JSON lines with device information:
 - `src/dw3000_driver.c` - DW3000 hardware driver
 - `src/uart_output.c` - UART formatting and output
 
-## License
+## AI Disclosure
 
-MIT
+**Here there be robots!** I *think* they are friendly, but they might just be very good at pretending. You might be a fool if you use this project for anything other than as an example of how silly it can be to use AI to code with.
+
+> This project was developed with the assistance of language models from OpenAI and Anthropic, which provided suggestions and code snippets to enhance the functionality and efficiency of the tools. The models were used to generate code, documentation, distraction, moral support, moral turpitude, and explanations for various components of the project.
